@@ -84,7 +84,7 @@ async def scrape_current_page(page, category, page_num):
                 }
                 page_results.append(job_dict)
         
-        print(f"      ✅ Found {len(page_results)} jobs on page {page_num}")
+        print(f"✅ Found {len(page_results)} jobs on page {page_num}")
         return page_results
         
     except Exception as e:
