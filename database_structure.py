@@ -1,5 +1,5 @@
 import mysql.connector
-import sys
+import os
 from mysql.connector import errorcode
 from env import load_dotenv
 
