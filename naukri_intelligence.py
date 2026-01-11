@@ -117,12 +117,12 @@ async def click_next_button(page):
                     # Verify it's actually a clickable link element
                     tag_name = await next_button.evaluate('el => el.tagName')
                     if tag_name.lower() == 'a':
-                        print(f"      🔍 Found Next button using selector: {selector}")
+                        print(f"🔍 Found Next button using selector: {selector}")
                         break
                     elif tag_name.lower() == 'span':
                         # If we found the span, get its parent <a> tag
                         next_button = await next_button.evaluate_handle('el => el.parentElement')
-                        print(f"      🔍 Found Next button (via span parent)")
+                        print(f"🔍 Found Next button (via span parent)")
                         break
                     else:
                         next_button = None
@@ -147,7 +147,7 @@ async def click_next_button(page):
         
         # Click the Next button
         await next_button.click()
-        print(f"      🖱️ Clicked Next button successfully")
+        print(f"🖱️ Clicked Next button successfully")
         
         # Wait for navigation to complete
         await page.wait_for_load_state('networkidle', timeout=30000)
@@ -156,7 +156,7 @@ async def click_next_button(page):
         return True
         
     except Exception as e:
-        print(f"      ⚠️ Error clicking Next button: {e}")
+        print(f"⚠️ Error clicking Next button: {e}")
         return False
 
 
