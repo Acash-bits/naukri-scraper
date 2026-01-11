@@ -3,6 +3,7 @@ from playwright.async_api import async_playwright
 from playwright_stealth import Stealth
 import pandas as pd
 from bs4 import BeautifulSoup
+import random
 
 job_urls = {
     'Business Analyst': 'https://www.naukri.com/business-analyst-jobs-in-delhi-ncr?k=business+analyst&l=delhi+%2F+ncr%2C+gurugram%2C+noida&experience=4',
@@ -14,99 +15,226 @@ job_urls = {
 # CONFIGURE HOW MANY PAGES TO SCRAPE
 MAX_PAGES = 5  # Set to desired number of pages to scrape per category
 
-def generate_page_url(base_url, page_num):
-    if page_num ==1:
-        return base_url
-    
-    # Split URL at '?' to insert page number
-    if '?' in base_url:
-        base_part, query_part = base_url.split('?', 1)
-        return f"{base_part}-{page_num}?{query_part}"
-    return f"{base_url}-{page_num}"
+async def human_like_behavior(page):
+    """Simulate human-like mouse movements and scrolling"""
+    try:
+        # Random small scrolls
+        for _ in range(random.randint(2, 4)):
+            await page.mouse.wheel(0, random.randint(100, 300))
+            await asyncio.sleep(random.uniform(0.5, 1.5))
+        
+        # Scroll to middle
+        await page.evaluate('window.scrollTo(0, document.body.scrollHeight / 2)')
+        await asyncio.sleep(random.uniform(1, 2))
+        
+        # Scroll to bottom
+        await page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+        await asyncio.sleep(random.uniform(1, 2))
+        
+        # Scroll back up a bit
+        await page.evaluate('window.scrollTo(0, document.body.scrollHeight / 3)')
+        await asyncio.sleep(random.uniform(0.5, 1))
+    except Exception as e:
+        print(f"⚠️ Human behavior simulation error: {e}")
+
+async def scrape_current_page(page, category, page_num):
+    """Scrape job listings from the current page"""
+    try:
+        # Wait for job listings to load
+        await page.wait_for_selector('div.srp-jobtuple-wrapper', timeout=10000)
+        
+        # Get the page HTML content
+        html_content = await page.content()
+        
+        # Parse with BeautifulSoup
+        soup = BeautifulSoup(html_content, 'html.parser')
+        job_cards = soup.find_all('div', class_='srp-jobtuple-wrapper')
+        
+        if not job_cards:
+            print(f"      ⚠️ No job cards found on page {page_num}")
+            return []
+        
+        page_results = []
+        
+        for job in job_cards:
+            # Job Title
+            title_tag = job.find('a', class_='title')
+            # Company Name
+            company_tag = job.find('a', class_='comp-name')
+            # Experience for the job
+            experience_tag = job.find('span', class_='exp-wrap')
+            # Location of the job
+            location_tag = job.find('span', class_='loc-wrap')
+            # Job Posting Time
+            posting_tag = job.find('span', class_='job-post-day')
+            
+            if title_tag:
+                job_dict = {
+                    'Category': category,
+                    'Page': page_num,
+                    'Title': title_tag.text.strip() if title_tag else 'N/A',
+                    'Company': company_tag.text.strip() if company_tag else 'N/A',
+                    'Experience': experience_tag.text.strip() if experience_tag else 'N/A',
+                    'Location': location_tag.text.strip() if location_tag else 'N/A',
+                    'Posted': posting_tag.text.strip() if posting_tag else 'N/A',
+                    'Link': title_tag.get('href', 'N/A')
+                }
+                page_results.append(job_dict)
+        
+        print(f"      ✅ Found {len(page_results)} jobs on page {page_num}")
+        return page_results
+        
+    except Exception as e:
+        print(f"      ⚠️ Error scraping page {page_num}: {e}")
+        return []
+
+async def click_next_button(page):
+    """Click the Next button to navigate to the next page"""
+    try:
+        # Scroll to pagination area first
+        await page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+        await asyncio.sleep(random.uniform(1, 2))
+        
+        # Target the specific Next button element from Naukri
+        # <a href="/business-analyst-jobs-in-delhi-ncr-3" class="styles_btn-secondary__2AsIP"><span>Next</span><i class="ni-icon-arrow-2"></i></a>
+        next_selectors = [
+            'a.styles_btn-secondary__2AsIP:has-text("Next")',  # Primary selector - Naukri's Next button
+            'a.styles_btn-secondary__2AsIP span:has-text("Next")',  # Target the span inside
+            'a:has-text("Next")',  # Fallback: any link with "Next" text
+        ]
+        
+        next_button = None
+        
+        # Try each selector
+        for selector in next_selectors:
+            try:
+                next_button = await page.query_selector(selector)
+                if next_button:
+                    # Verify it's actually a clickable link element
+                    tag_name = await next_button.evaluate('el => el.tagName')
+                    if tag_name.lower() == 'a':
+                        print(f"      🔍 Found Next button using selector: {selector}")
+                        break
+                    elif tag_name.lower() == 'span':
+                        # If we found the span, get its parent <a> tag
+                        next_button = await next_button.evaluate_handle('el => el.parentElement')
+                        print(f"      🔍 Found Next button (via span parent)")
+                        break
+                    else:
+                        next_button = None
+            except Exception as e:
+                print(f"      ⚠️ Selector '{selector}' failed: {e}")
+                continue
+        
+        if not next_button:
+            print(f"      ⚠️ Next button not found - reached last page")
+            return False
+        
+        # Scroll the Next button into view
+        await next_button.scroll_into_view_if_needed()
+        await asyncio.sleep(random.uniform(0.5, 1.5))
+        
+        # Hover over the button first (more human-like)
+        try:
+            await next_button.hover()
+            await asyncio.sleep(random.uniform(0.3, 0.7))
+        except:
+            pass
+        
+        # Click the Next button
+        await next_button.click()
+        print(f"      🖱️ Clicked Next button successfully")
+        
+        # Wait for navigation to complete
+        await page.wait_for_load_state('networkidle', timeout=30000)
+        await asyncio.sleep(random.uniform(3, 5))
+        
+        return True
+        
+    except Exception as e:
+        print(f"      ⚠️ Error clicking Next button: {e}")
+        return False
 
 
-async def scrape_tab(context, category, base_url, max_pages):
-    """Scrapes multiple pages for a single job category"""
+async def scrape_tab(context, category, base_url, max_pages, visit_homepage=True):
+    """Scrapes multiple pages for a single job category by clicking Next"""
     page = await context.new_page()
     
     # Apply stealth
     stealth_config = Stealth()
     await stealth_config.apply_stealth_async(page)
     
-    print(f"🚀 Scraping: {category} Page-1 to Page{max_pages}")
+    print(f"🚀 Scraping: {category} (Up to {max_pages} pages)")
 
-    all_results = [] # Aggregate results from all pages
+    all_results = []
     
     try:
-        # Loop through each page
-        for page_num in range(1, max_pages + 1):
-            # Generate URL for current page
-            url=generate_page_url(base_url, page_num)
-            print(f"   📄 Page {page_num}: {url}")
-
+        # Optional: visit homepage to establish session (recommended for first category)
+        if visit_homepage:
+            print(f"   🌐 Visiting homepage to establish session...")
+            await page.goto('https://www.naukri.com/', wait_until="networkidle", timeout=60000)
+            await asyncio.sleep(random.uniform(2, 4))
+            
+            # Try to close any popups/modals
             try:
-                # Navigate to the page
-                await page.goto(url, wait_until="domcontentloaded", timeout=60000)
-                
-                # Wait for the page to load
-                await asyncio.sleep(5)
-                
-                # Get the page HTML content
-                html_content = await page.content()
-                
-                # Parse with BeautifulSoup
-                soup = BeautifulSoup(html_content, 'html.parser')
-                job_cards = soup.find_all('div', class_='srp-jobtuple-wrapper')
-                
-                page_results = []
-                
-                for job in job_cards:
-                    # Job Title
-                    title_tag = job.find('a', class_='title')
-                    # Company Name
-                    company_tag = job.find('a', class_='comp-name')
-                    # Experience for the job
-                    experience_tag = job.find('span', class_='exp-wrap')
-                    # Location of the job
-                    location_tag = job.find('span', class_='loc-wrap')
-                    # Posted Date Tag
-                    posted_date_tag = job.find('span', class_='job-post-day')
-                    
-                    if title_tag:
-                        job_dict = {
-                            'Category': category,
-                            'Title': title_tag.text.strip() if title_tag else 'N/A',
-                            'Company': company_tag.text.strip() if company_tag else 'N/A',
-                            'Experience': experience_tag.text.strip() if experience_tag else 'N/A',
-                            'Location': location_tag.text.strip() if location_tag else 'N/A',
-                            'Posted': posted_date_tag.text.strip() if posted_date_tag else 'N/A',
-                            'Link': title_tag.get('href', 'N/A')
-                        }
-                        page_results.append(job_dict)
-                
-                print(f"✅ Found {len(page_results)} jobs for {category}")
-                
-                # Add page results to all results
-                all_results.extend(page_results)
+                close_buttons = await page.query_selector_all('button[class*="close"], div[class*="close"], span[class*="close"]')
+                for btn in close_buttons[:3]:
+                    try:
+                        await btn.click(timeout=2000)
+                        await asyncio.sleep(0.5)
+                    except:
+                        pass
+            except:
+                pass
+        
+        # Navigate to the first page
+        print(f"📄 Navigating to starting page...")
+        await page.goto(base_url, wait_until="networkidle", timeout=60000)
+        await asyncio.sleep(random.uniform(3, 5))
+        
+        # Scrape pages using Next button
+        page_num = 1
+        
+        while page_num <= max_pages:
+            print(f"📄 Scraping Page {page_num}...")
+            current_url = page.url
+            print(f"URL: {current_url}")
             
-                if page_num < max_pages:
-                    delay = 10 # 10 Seconds delay between pages
-                    print(f'⏳ Waiting for {delay} seconds before next page...')
-                    await asyncio.sleep(delay)
+            # Simulate human behavior
+            await human_like_behavior(page)
             
-            except Exception as e:
-                print(f"⚠️ Error while scraping {category} Page-{page_num}: {e}")
-                # Continue to next page
-                continue
+            # Scrape current page
+            page_results = await scrape_current_page(page, category, page_num)
+            all_results.extend(page_results)
             
-        print(f"✅ Total: {len(all_results)} jobs for {category} across {max_pages} pages\n")
+            # Check if we should continue
+            if page_num >= max_pages:
+                print(f"ℹ️ Reached max pages limit ({max_pages})")
+                break
+            
+            # Delay before clicking Next
+            delay = random.uniform(10, 18)
+            print(f'⏳ Waiting {delay:.1f}s before clicking Next...')
+            await asyncio.sleep(delay)
+            
+            # Click Next button to go to next page
+            next_clicked = await click_next_button(page)
+            
+            if not next_clicked:
+                print(f"ℹ️ No more pages available (reached last page)")
+                break
+            
+            page_num += 1
+        
+        print(f"✅ Total: {len(all_results)} jobs for {category} across {page_num} page(s)\n")
         return all_results
-
+            
     except Exception as e:
-        print(f"⚠️ Error in {category}: {e}")
+        print(f"⚠️ Critical error in {category}: {e}")
         return all_results
     finally:
         await page.close()
+
 
 async def main():
     async with async_playwright() as p:
@@ -127,7 +255,7 @@ async def main():
         # Create context with more realistic settings
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            viewport={'width': 1920, 'height': 1080},
+            viewport={'width': 1366, 'height': 768},
             locale='en-US',
             timezone_id='Asia/Kolkata',  # Match your location
             permissions=['geolocation'],
@@ -149,6 +277,23 @@ async def main():
         # Flatten the results
         all_job_data = [item for sublist in all_pages_data for item in sublist]
         
+        # OPTION 2: SEQUENTIAL (SAFER) - One category at a time
+        # Use this if: Concurrent scraping triggers bot detection
+        # Uncomment below and comment out OPTION 1 above:
+        
+        # print("🚀 Starting SEQUENTIAL scraping (one category at a time)...\n")
+        # all_job_data = []
+        # for i, (cat, url) in enumerate(job_urls.items()):
+        #     visit_home = (i == 0)  # Only visit homepage for first category
+        #     results = await scrape_tab(context, cat, url, MAX_PAGES, visit_homepage=visit_home)
+        #     all_job_data.extend(results)
+        #     
+        #     # Delay between categories
+        #     if i < len(job_urls) - 1:
+        #         delay = random.uniform(15, 25)
+        #         print(f"⏸️  Waiting {delay:.1f}s before next category...\n")
+        #         await asyncio.sleep(delay)
+
         # Display the data in the terminal
         if all_job_data:
             df = pd.DataFrame(all_job_data)
