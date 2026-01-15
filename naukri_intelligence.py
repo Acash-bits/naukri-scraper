@@ -16,6 +16,28 @@ job_urls = {
 # CONFIGURE HOW MANY PAGES TO SCRAPE
 MAX_PAGES = 2  # Set to desired number of pages to scrape per category
 
+def categorize_posting_time(posted_text):
+    """Categorize job posting time into defined buckets"""
+    if not posted_text or posted_text == 'N/A':
+        return 'N/A'
+    
+    posted_text_lower = posted_text.lower()
+
+    # Just now cateogry: Up to 2 days
+    just_now_keywords = ['hour', 'today', 'just now', '1 day', '2 days']
+    if any(keyword in posted_text_lower for keyword in just_now_keywords):
+        return 'Posted Just Now'
+    
+    # Recent Category: 3 to 7 days (1 Week)
+    recent_keywords = ['3 days', '4 days', '5 days', '6 days', '7 days', '1 week']
+    if any(keyword in posted_text_lower for keyword in recent_keywords):
+        return 'Recently Posted'
+    
+    # Old category: Includes everytime that is after the above mentioned ones
+    return 'old'
+
+
+
 async def human_like_behavior(page):
     """Simulate human-like mouse movements and scrolling"""
     try:
