@@ -1,30 +1,48 @@
 import mysql.connector
 import os
-from mysql.connector import errorcode
-from env import load_dotenv
+from mysql.connector import Error
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # 1. Establish connection to the server
 # Use your actual MySQL username and password
-db_connection = mysql.connector.connect(
-  host="localhost",
-  user="your_username",
-  password="your_password"
-)
+# Database Configuration
+DB_CONFIG = {
+    'host': os.getenv('HOST'),
+    'user': os.getenv('USER'),
+    'password': os.getenv('PASS'),
+    'database': os.getenv('DATABASE')
+}
 
-# 2. Create a cursor object to interact with the server
-cursor = db_connection.cursor()
-
-# 3. Execute the SQL command to create the database
-# Using 'IF NOT EXISTS' prevents errors if the database already exists
-cursor.execute("CREATE DATABASE IF NOT EXISTS my_new_database")
-
-print("Database created successfully.")
-
-# 4. (Optional) Verify by listing all databases
-cursor.execute("SHOW DATABASES")
-for db in cursor:
-    print(db)
-
-# 5. Close the connection
-cursor.close()
-db_connection.close()
+def init_db_mysql():
+    '''Checks connection and ensures the table exists'''
+    conn = None
+    try:
+        conn = mysql.connector.connect(**DB_CONFIG)
+        cursor = conn.cursor()
+        
+        # Create table if it doesn't exist so the rest of the script doesn't crash
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS jobs_postings (
+                Job_id INT primary key auto_increment,
+                Company_Name VARCHAR(512),
+                Time_Category VARCHAR(90),
+                Posting_Time VARCHAR(20),
+                Job_Title VARCHAR(512),
+                Category VARCHAR(100),
+                Experience VARCHAR(20),
+                Location VARCHAR(100),
+                Salary VARCHAR(512),
+                Page_Number INT,
+                LINK VARCHAR(768) unique not null ,
+                Scraped_Time TIMESTAMP default CURRENT_TIMESTAMP()
+            )
+        """)
+        print("✅ Connection established and Table is ready!")
+    except Error as e:
+        print(f'❌ Connection failed: {e}')
+    finally:
+        if conn and conn.is_connected():
+            cursor.close()
+            conn.close()
