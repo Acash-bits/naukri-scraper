@@ -34,7 +34,7 @@ def categorize_posting_time(posted_text):
         return 'Recently Posted'
     
     # Old category: Includes everytime that is after the above mentioned ones
-    return 'old'
+    return 'Old'
 
 
 
@@ -94,6 +94,9 @@ async def scrape_current_page(page, category, page_num):
             salary_tag = job.find('span', class_='sal-wrap')
             
             if title_tag:
+                # Categorizing posting time
+                time_category = categorize_posting_time(posting_tag.text.strip() if posting_tag else 'N/A')
+                
                 job_dict = {
                     'Category': category,
                     'Page': page_num,
@@ -102,6 +105,7 @@ async def scrape_current_page(page, category, page_num):
                     'Experience': experience_tag.text.strip() if experience_tag else 'N/A',
                     'Location': location_tag.text.strip() if location_tag else 'N/A',
                     'Salary': salary_tag.text.strip() if salary_tag else 'N/A',
+                    'Time Category': time_category,
                     'Posted': posting_tag.text.strip() if posting_tag else 'N/A',
                     'Link': title_tag.get('href', 'N/A')
                 }
@@ -275,6 +279,7 @@ def print_job_details(all_job_data):
         print(f"Company Name:    {job['Company']}")
         print(f"Experience:      {job['Experience']}")
         print(f"Location:        {job['Location']}")
+        print(f"Time Category:   {job['Time Category']}")
         print(f"Posting Time:    {job['Posted']}")
         print(f"Salary:          {job['Salary']}")
         print(f"Link:            {job['Link']}")
