@@ -21,6 +21,22 @@ DB_CONFIG = {
     'database': os.getenv('DATABASE')
 }
 
+def init_db_mysql():
+    '''Initialize the MYSQL database and Table'''
+    try:
+        conn = mysql.connector.connect(
+            host=DB_CONFIG['host'],
+            user=DB_CONFIG['user'],
+            password=DB_CONFIG['password']
+        )
+        cursor=conn.cursor()
+        print("Connection with database has been established successfully")
+    except Error as e:
+        print(f'Error while establishing the connection with MySQL: {e}')
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
 
 
 job_urls = {
@@ -32,7 +48,7 @@ job_urls = {
 }
 
 # CONFIGURE HOW MANY PAGES TO SCRAPE
-MAX_PAGES = 1  # Set to desired number of pages to scrape per category
+MAX_PAGES = 50  # Set to desired number of pages to scrape per category
 
 def categorize_posting_time(posted_text):
     """Categorize job posting time into defined buckets"""
@@ -305,6 +321,8 @@ def print_job_details(all_job_data):
         print(f"Category:        {job['Category']}")
 
 async def main():
+    init_db_mysql()
+
     async with async_playwright() as p:
         # Launch with additional anti-detection flags
         browser = await p.chromium.launch(
@@ -372,6 +390,8 @@ async def main():
             pd.set_option('display.max_colwidth', None)
             
             print_job_details(all_job_data)
+            print("Saving data to MySQL......")
+            save_job_to_mysql(all_job_data)
 
             # Show summary by category
             df = pd.DataFrame(all_job_data)
@@ -387,24 +407,6 @@ async def main():
         
         await browser.close()
 
-
-def init_db_mysql():
-    '''Initialize the MYSQL database and Table'''
-    try:
-        conn = mysql.connector.connect(
-            host=DB_CONFIG['host'],
-            user=DB_CONFIG['user'],
-            password=DB_CONFIG[int('pass')]
-        )
-        cursor=conn.cursor()
-        print("Connection with database has been established successfully")
-    except Error as e:
-        print(f'Error while establishing the connection with MySQL: {e}')
-    finally:
-        if conn.is_connected():
-            cursor.close()
-            conn.close()
-
 def save_job_to_mysql(job_list):
     """Inserts a job record to MySQL, ignoring duplicates based on URL"""
     if not job_list:
@@ -418,14 +420,23 @@ def save_job_to_mysql(job_list):
 
         # Query to insert the data in batch
         query = """
-            INSERT IGNORE INTO jobs_postings
-            (category, title, company, location, salary, posted_text, time_bucket, url)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"""
+            INSERT IGNORE INTO job_postings
+            (category, title, company_name, location, salary, experience, posting_time, time_category, link, page_number)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
         
         # Converting list of dictonaries to a list of tuples (which MySQL expects)
         data_to_insert = [
-            (j['Category'], j['Title'], j['Company'], j['Location'],
-            j['Salary'], j['Posted'], j['Time Category'], j['Link'])
+            (
+            j['Category'],
+            j['Title'],
+            j['Company'],
+            j['Location'],
+            j['Experience'],
+            j['Salary'],
+            j['Posted'],
+            j['Time Category'],
+            j['Link'],
+            j['Page'])
             for j in job_list
         ]
         # Insert the data using batch insert
