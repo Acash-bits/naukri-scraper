@@ -61,7 +61,7 @@ job_urls = {
 }
 
 # CONFIGURE HOW MANY PAGES TO SCRAPE
-MAX_PAGES = 50  # Set to desired number of pages to scrape per category
+MAX_PAGES = 1  # Set to desired number of pages to scrape per category
 
 def categorize_posting_time(posted_text):
     """Categorize job posting time into defined buckets"""
@@ -384,14 +384,14 @@ def get_unsent_jobs():
     conn = None
     try:
         conn = mysql.connector.connect(**DB_CONFIG)
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
 
         query =''' 
             SELECT job_id, category, job_title, company_name, location, 
                    salary, experience, posting_time, time_category, link
             FROM job_postings
             WHERE email_sent = 0
-            ORDER BY created_at DESC
+            ORDER BY scraped_time DESC
             '''
         cursor.execute(query)
         unsent_jobs = cursor.fetchall()
@@ -615,7 +615,7 @@ def send_job_emails(jobs):
         # Send Email
         print(f" Connecting to STMP Server: {EMAIL_CONFIG['smtp_server']}:{EMAIL_CONFIG['smtp_port']}")
 
-        with smtplib.SMTP(EMAIL_CONFIG('smtp_server'), EMAIL_CONFIG('smtp_port')) as server:
+        with smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port']) as server:
             server.starttls()
             server.login(EMAIL_CONFIG['sender_email'], EMAIL_CONFIG['sender_password'])
             server.send_message(msg)
@@ -638,7 +638,7 @@ def mark_jobs_as_sent(job_ids):
         cursor= conn.cursor()
 
         # Update multi jobs at once
-        placeholders = ','.join(['%s']) * len(job_ids)
+        placeholders = ','.join(['%s'] * len(job_ids))
         query = f'Update job_postings SET email_sent = 1 where id in ({placeholders})'
 
         cursor.execute(query,job_ids)
