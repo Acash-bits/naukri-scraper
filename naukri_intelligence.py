@@ -7,6 +7,10 @@ import random
 import mysql.connector
 from mysql.connector import Error
 import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime
 from dotenv import load_dotenv
 
 
@@ -19,6 +23,15 @@ DB_CONFIG = {
     'user': os.getenv('USER'),
     'password': os.getenv('PASS'),
     'database': os.getenv('DATABASE')
+}
+
+# Email Configuration
+EMAIL_CONFIG = {
+    'smtp_server': os.getenv('SMTP_SERVER', 'smtp.gmail.com'),
+    'smtp_port': int(os.getenv('SMTP_PORT', '587')),
+    'sender_email': os.getenv('SENDER_EMAIL'),
+    'sender_password': os.getenv('SENDER_PASSWORD'),
+    'recipient_email': os.getenv('RECIPIENT_EMAIL')
 }
 
 def init_db_mysql():
@@ -320,6 +333,353 @@ def print_job_details(all_job_data):
         print(f"Page Number:     {job['Page']}")
         print(f"Category:        {job['Category']}")
 
+
+def save_job_to_mysql(job_list):
+    """Inserts a job record to MySQL, ignoring duplicates based on URL"""
+    if not job_list:
+        return
+
+    conn = None # Initiliaze to avoid errors in 'finally' if connection fails
+
+    try:
+        conn=mysql.connector.connect(**DB_CONFIG)
+        cursor=conn.cursor()
+
+        # Query to insert the data in batch
+        query = """
+            INSERT IGNORE INTO job_postings
+            (category, Job_title, company_name, location, salary, experience, posting_time, time_category, link, page_number)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+        
+        # Converting list of dictonaries to a list of tuples (which MySQL expects)
+        data_to_insert = [
+            (
+            j['Category'],
+            j['Title'],
+            j['Company'],
+            j['Location'],
+            j['Salary'],
+            j['Experience'],
+            j['Posted'],
+            j['Time Category'],
+            j['Link'],
+            j['Page'])
+            for j in job_list
+        ]
+        # Insert the data using batch insert
+        cursor.executemany(query, data_to_insert)
+        conn.commit()
+        print(f'Successfully saved {cursor.rowcount} new jobs to the database.')
+    
+    # Error handling, printing the error that might get encountered while running the code
+    except Error as e:
+        print(f'Database insert error: {e}')
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
+
+def get_unsent_jobs():
+    """Fetch all jobs where email_sent = 0"""
+    conn = None
+    try:
+        conn = mysql.connector.connect(**DB_CONFIG)
+        cursor = conn.cursor()
+
+        query =''' 
+            SELECT job_id, category, job_title, company_name, location, 
+                   salary, experience, posting_time, time_category, link
+            FROM job_postings
+            WHERE email_sent = 0
+            ORDER BY created_at DESC
+            '''
+        cursor.execute(query)
+        unsent_jobs = cursor.fetchall()
+
+        print(f"Found {len(unsent_jobs)} unsent jobs in database")
+        return unsent_jobs
+    except Error as e:
+        print(f'Error fetching unsent jobs: {e}')
+        return[]
+    finally:
+        if conn and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+
+def create_email_html(jobs):
+    """Create a nicely formatted HTML email with job listings"""
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{
+                font-family: Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 900px;
+                margin: 0 auto;
+                padding: 20px;
+            }}
+            .header {{
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 30px;
+                border-radius: 10px;
+                text-align: center;
+                margin-bottom: 30px;
+            }}
+            .job-card {{
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+                padding: 20px;
+                margin-bottom: 20px;
+                background: white;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                transition: transform 0.2s;
+            }}
+            .job-card:hover {{
+                transform: translateY(-2px);
+                box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            }}
+            .job-title {{
+                color: #667eea;
+                font-size: 20px;
+                font-weight: bold;
+                margin-bottom: 10px;
+            }}
+            .company {{
+                color: #555;
+                font-size: 16px;
+                font-weight: 600;
+                margin-bottom: 10px;
+            }}
+            .detail-row {{
+                margin: 8px 0;
+                display: flex;
+                align-items: center;
+            }}
+            .label {{
+                font-weight: 600;
+                color: #666;
+                min-width: 120px;
+            }}
+            .value {{
+                color: #333;
+            }}
+            .badge {{
+                display: inline-block;
+                padding: 4px 12px;
+                border-radius: 12px;
+                font-size: 12px;
+                font-weight: 600;
+                margin-right: 8px;
+            }}
+            .badge-new {{
+                background: #10b981;
+                color: white;
+            }}
+            .badge-recent {{
+                background: #f59e0b;
+                color: white;
+            }}
+            .badge-old {{
+                background: #6b7280;
+                color: white;
+            }}
+            .apply-btn {{
+                display: inline-block;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 12px 24px;
+                text-decoration: none;
+                border-radius: 6px;
+                font-weight: 600;
+                margin-top: 15px;
+            }}
+            .footer {{
+                text-align: center;
+                color: #666;
+                padding: 20px;
+                margin-top: 30px;
+                border-top: 2px solid #e0e0e0;
+            }}
+            .category-tag {{
+                background: #f3f4f6;
+                padding: 4px 10px;
+                border-radius: 4px;
+                font-size: 13px;
+                color: #4b5563;
+                font-weight: 600;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>🎯 New Job Opportunities</h1>
+            <p style="margin: 10px 0 0 0; font-size: 18px;">
+                {len(jobs)} new job{'' if len(jobs) == 1 else 's'} matching your preferences
+            </p>
+            <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                {datetime.now().strftime('%B %d, %Y at %I:%M %p')}
+            </p>
+        </div>
+    """
+    
+    for idx, job in enumerate(jobs, 1):
+        # Determine badge color based on time category
+        badge_class = 'badge-old'
+        if job['time_category'] == 'Posted Just Now':
+            badge_class = 'badge-new'
+        elif job['time_category'] == 'Recently Posted':
+            badge_class = 'badge-recent'
+        
+        html += f"""
+        <div class="job-card">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
+                <div>
+                    <div class="job-title">{job['job_title']}</div>
+                    <div class="company">{job['company_name']}</div>
+                </div>
+                <span class="category-tag">{job['category']}</span>
+            </div>
+            
+            <div class="detail-row">
+                <span class="label">📍 Location:</span>
+                <span class="value">{job['location']}</span>
+            </div>
+            
+            <div class="detail-row">
+                <span class="label">💼 Experience:</span>
+                <span class="value">{job['experience']}</span>
+            </div>
+            
+            <div class="detail-row">
+                <span class="label">💰 Salary:</span>
+                <span class="value">{job['salary']}</span>
+            </div>
+            
+            <div class="detail-row">
+                <span class="label">⏰ Posted:</span>
+                <span class="badge {badge_class}">{job['time_category']}</span>
+                <span class="value" style="font-size: 13px; color: #666;">({job['posting_time']})</span>
+            </div>
+            
+            <a href="{job['link']}" class="apply-btn" target="_blank">
+                View Job Details →
+            </a>
+        </div>
+        """
+    
+    html += """
+        <div class="footer">
+            <p><strong>Job Alert System</strong></p>
+            <p style="font-size: 14px; color: #888; margin-top: 10px;">
+                You're receiving this email because you subscribed to job alerts.<br>
+                Jobs are automatically scraped from Naukri.com for Delhi NCR region.
+            </p>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return html
+
+def send_job_emails(jobs):
+    """Send Email with job listing"""
+    if not jobs:
+        print('No new jobs in the databse to send')
+        return False
+    
+    try:
+        # Validate email configuration
+        if not all([EMAIL_CONFIG['sender_email'], 
+                    EMAIL_CONFIG['sender_password'], 
+                    EMAIL_CONFIG['recipient_email']]):
+            print('Error configuring the email. Please check the .env (environment) file')
+            return False
+        
+        # Create Message
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f'{len(jobs)} New Jobs {"s" if len(jobs) > 1 else " "} Alert - {datetime.now().strftime("%B %d, %Y")}'
+        msg['From'] = EMAIL_CONFIG['sender_email']
+        msg['To'] = EMAIL_CONFIG['recipient_email']
+
+        # Create HTML Content
+        html_content = create_email_html(jobs)
+        html_part = MIMEText(html_content, 'html')
+        msg.attach(html_part)
+
+        # Send Email
+        print(f" Connecting to STMP Server: {EMAIL_CONFIG['smtp_server']}:{EMAIL_CONFIG['smtp_port']}")
+
+        with smtplib.SMTP(EMAIL_CONFIG('smtp_server'), EMAIL_CONFIG('smtp_port')) as server:
+            server.starttls()
+            server.login(EMAIL_CONFIG['sender_email'], EMAIL_CONFIG['sender_password'])
+            server.send_message(msg)
+
+        print('===='*80)
+        print(f'Email sent successfully to {EMAIL_CONFIG["recipient_email"]} with {len(jobs)} job listings!')
+        print('===='*80)
+    except Exception as e:
+        print(f'Error sending email: {e}')
+        return False
+
+def mark_jobs_as_sent(job_ids):
+    '''Mark jobs as sent(email_sent = 1) in database'''
+    if not job_ids:
+        return
+    
+    conn = None
+    try:
+        conn=mysql.connector.connect(**DB_CONFIG)
+        cursor= conn.cursor()
+
+        # Update multi jobs at once
+        placeholders = ','.join(['%s']) * len(job_ids)
+        query = f'Update job_postings SET email_sent = 1 where id in ({placeholders})'
+
+        cursor.execute(query,job_ids)
+        conn.commit()
+
+        print(f'Marked {cursor.rowcount} jobs as sent in database')
+    except Error as e:
+        print(f'Error updating the jobs as sent: {e}')
+    finally:
+        if conn and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+def process_and_send_emails():
+    '''Main function to fetch unsent jobs and send them via email'''
+    print('\n' + '='*80)
+    print('PROCESSING EMAIL NOTIFICATIONS')
+    print("="*80 + "\n")
+
+    # Get unsent jobs
+    unsent_jobs = get_unsent_jobs()
+    if not unsent_jobs:
+        print('No unsent jobs found. All caught up!!!!')
+        return
+    
+    print(f'\n Preparing to send {len(unsent_jobs)} job(s) via email.....')
+    
+    #Send Email
+    email_sent = send_job_emails(unsent_jobs)
+
+    if email_sent:
+        # Marks jobs as sent
+        job_ids = [job['id'] for job in unsent_jobs]
+        mark_jobs_as_sent(job_ids)
+
+        print('\nEmail process completed sucessfully!!')
+    else:
+        print('\nEmail sending failed. Jobs remain marked as unsent')
+
+    print("\n" + "=" * 80 + "\n")
+
 async def main():
     init_db_mysql()
 
@@ -407,51 +767,8 @@ async def main():
         
         await browser.close()
 
-def save_job_to_mysql(job_list):
-    """Inserts a job record to MySQL, ignoring duplicates based on URL"""
-    if not job_list:
-        return
-
-    conn = None # Initiliaze to avoid errors in 'finally' if connection fails
-
-    try:
-        conn=mysql.connector.connect(**DB_CONFIG)
-        cursor=conn.cursor()
-
-        # Query to insert the data in batch
-        query = """
-            INSERT IGNORE INTO job_postings
-            (category, Job_title, company_name, location, salary, experience, posting_time, time_category, link, page_number)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
-        
-        # Converting list of dictonaries to a list of tuples (which MySQL expects)
-        data_to_insert = [
-            (
-            j['Category'],
-            j['Title'],
-            j['Company'],
-            j['Location'],
-            j['Salary'],
-            j['Experience'],
-            j['Posted'],
-            j['Time Category'],
-            j['Link'],
-            j['Page'])
-            for j in job_list
-        ]
-        # Insert the data using batch insert
-        cursor.executemany(query, data_to_insert)
-        conn.commit()
-        print(f'Successfully saved {cursor.rowcount} new jobs to the database.')
-    
-    # Error handling, printing the error that might get encountered while running the code
-    except Error as e:
-        print(f'Database insert error: {e}')
-    finally:
-        if conn.is_connected():
-            cursor.close()
-            conn.close()
-
+    # After scraping, process and send emails for unsent jobs
+    process_and_send_emails()
 
 if __name__ == "__main__":
     asyncio.run(main())
