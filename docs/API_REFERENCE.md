@@ -563,34 +563,34 @@ asyncio.run(main())
 
 ```
 ┌─────────────────────────────────────────┐
-│ 1. Initialize Database                 │
+│ 1. Initialize Database                  │
 ├─────────────────────────────────────────┤
-│ 2. Launch Chromium Browser             │
-│    ├── Headless mode                   │
-│    ├── Anti-detection flags            │
-│    └── Stealth configuration           │
+│ 2. Launch Chromium Browser              │
+│    ├── Headless mode                    │
+│    ├── Anti-detection flags             │
+│    └── Stealth configuration            │
 ├─────────────────────────────────────────┤
-│ 3. Create Browser Context              │
-│    ├── Realistic user agent            │
-│    ├── Viewport: 1366x768              │
-│    ├── Geolocation: Delhi              │
-│    └── Extra HTTP headers              │
+│ 3. Create Browser Context               │
+│    ├── Realistic user agent             │
+│    ├── Viewport: 1366x768               │
+│    ├── Geolocation: Delhi               │
+│    └── Extra HTTP headers               │
 ├─────────────────────────────────────────┤
-│ 4. Scrape All Categories               │
-│    ├── Option A: Concurrent            │
-│    │   (All at once, faster)           │
-│    └── Option B: Sequential            │
-│        (One by one, safer)             │
+│ 4. Scrape All Categories                │
+│    ├── Option A: Concurrent             │
+│    │   (All at once, faster)            │
+│    └── Option B: Sequential             │
+│        (One by one, safer)              │
 ├─────────────────────────────────────────┤
-│ 5. Process Results                     │
-│    ├── Display in console              │
-│    ├── Save to MySQL                   │
-│    └── Show summary by category        │
+│ 5. Process Results                      │
+│    ├── Display in console               │
+│    ├── Save to MySQL                    │
+│    └── Show summary by category         │
 ├─────────────────────────────────────────┤
-│ 6. Send Email Notifications            │
-│    └── process_and_send_emails()       │
+│ 6. Send Email Notifications             │
+│    └── process_and_send_emails()        │
 ├─────────────────────────────────────────┤
-│ 7. Close Browser                       │
+│ 7. Close Browser                        │
 └─────────────────────────────────────────┘
 ```
 
