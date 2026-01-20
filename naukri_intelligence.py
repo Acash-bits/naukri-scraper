@@ -740,7 +740,7 @@ def mark_jobs_as_sent(job_ids):
 
         # Update multi jobs at once
         placeholders = ','.join(['%s'] * len(job_ids))
-        query = f'Update job_postings SET email_sent = 1 where id in ({placeholders})'
+        query = f'Update job_postings SET email_sent = 1 where job_id in ({placeholders})'
 
         cursor.execute(query,job_ids)
         conn.commit()
