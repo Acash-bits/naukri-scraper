@@ -772,7 +772,7 @@ def process_and_send_emails():
 
     if email_sent:
         # Marks jobs as sent
-        job_ids = [job['id'] for job in unsent_jobs]
+        job_ids = [job['job_id'] for job in unsent_jobs]
         mark_jobs_as_sent(job_ids)
 
         print('\nEmail process completed sucessfully!!')
