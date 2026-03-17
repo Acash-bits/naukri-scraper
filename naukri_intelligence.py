@@ -50,7 +50,7 @@ job_urls = {
 }
 
 # Scraping parameters
-MAX_PAGES = 50               # Max pages to scrape per category
+MAX_PAGES = 1               # Max pages to scrape per category
 SCRAPE_INTERVAL_HOURS = 3    # Hours between scheduled runs
 RUN_IMMEDIATELY = True       # Run on startup or wait for first interval
 
@@ -223,7 +223,7 @@ def categorize_posting_time(posted_text):
 
     within_week_keywords = ['5 days', '6 days', '7 days']
     if any(keyword in posted_text_lower for keyword in within_week_keywords):
-        return 'Posted This Week'
+        return 'Posted within 5 - 7 days'
 
     return 'Old'
 
