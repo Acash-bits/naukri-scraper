@@ -43,10 +43,10 @@ EMAIL_CONFIG = {
 # Job Search URLs — add or remove categories here
 job_urls = {
     'Strategy Analyst':        'https://www.naukri.com/strategy-analyst-jobs-in-delhi-ncr?k=strategy%20analyst&l=delhi%20%2F%20ncr%2C%20noida%2C%20gurugram&experience=4&nignbevent_src=jobsearchDeskGNB',
+    'Strategy Manager':         'https://www.naukri.com/strategy-manager-jobs-in-delhi-ncr?k=strategy%20manager&l=delhi%20%2F%20ncr%2C%20gurugram%2C%20noida&experience=4&nignbevent_src=jobsearchDeskGNB',
     'Business Analyst':        'https://www.naukri.com/business-analyst-jobs-in-delhi-ncr?k=business+analyst&l=delhi+%2F+ncr%2C+gurugram%2C+noida&experience=4',
     'Senior Business Analyst': 'https://www.naukri.com/senior-business-analyst-jobs-in-delhi-ncr?k=senior+business+analyst&l=delhi+%2F+ncr%2C+gurugram%2C+noida&experience=4',
     'Data Analyst':            'https://www.naukri.com/data-analyst-jobs-in-delhi-ncr?k=data+analyst&l=delhi+%2F+ncr%2C+gurugram%2C+noida&experience=4',
-    'Product Manager':         'https://www.naukri.com/product-manager-jobs-in-delhi-ncr?k=product+manager&l=delhi+%2F+ncr%2C+gurugram%2C+noida&experience=4'
 }
 
 # Scraping parameters
@@ -57,11 +57,11 @@ RUN_IMMEDIATELY = True       # Run on startup or wait for first interval
 # Category colour map for email gradients (hex values, no #)
 # Add a new entry here whenever you add a new category to job_urls
 CATEGORY_COLORS = {
+    'Strategy Manager':         ('43e97b', '38f9d7'),   # green-teal
+    'Strategy Analyst':        ('fa709a', 'fee140'),   # pink-yellow
     'Business Analyst':        ('667eea', '764ba2'),   # purple
     'Senior Business Analyst': ('f093fb', 'f5576c'),   # pink-red
     'Data Analyst':            ('4facfe', '00f2fe'),   # blue-cyan
-    'Product Manager':         ('43e97b', '38f9d7'),   # green-teal
-    'Strategy Analyst':        ('fa709a', 'fee140'),   # pink-yellow
 }
 DEFAULT_COLORS = ('667eea', '764ba2')
 
